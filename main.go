@@ -58,8 +58,7 @@ func main() {
 		usage(os.Args[0], 1)
 	}
 
-	// Parse every arg except for the last one, since that will always be our
-	// stream URL.
+	// Parse command line arguments.
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		if len(arg) >= 1 && arg[0] == '-' {
