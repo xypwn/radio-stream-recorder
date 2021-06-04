@@ -155,7 +155,7 @@ func main() {
 		if !discard {
 			err := os.WriteFile(filename, raw.Bytes(), 0666)
 			if err != nil {
-				printErrWhileRecording("Error reading stream: %v", err)
+				printErrWhileRecording("Error writing file: %v", err)
 				continue
 			}
 			printInfo("Saved track as: %v", filename)
