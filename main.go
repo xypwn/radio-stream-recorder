@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"time"
 
 	"rsr/util"
 	"rsr/vorbis"
@@ -106,7 +107,8 @@ func main() {
 
 	waitReader := util.NewWaitReader(resp.Body)
 
-	// The first track is always discarded, as it is always going to be
+	// The first track is always discarded, as streams usually don't start at
+	// the exact end of a track, meaning it is almost certainly going to be
 	// incomplete.
 	discard := true
 
@@ -119,16 +121,23 @@ func main() {
 	for {
 		var raw bytes.Buffer
 
+		// Write all the bytes of the stream we'll read into a buffer to be able
+		// save it to a file later.
 		r := io.TeeReader(waitReader, &raw)
 
 		d := vorbis.NewDecoder(r)
 
+		// Read until metadata of the track. Keep in mind that the read bytes
+		// are also copied to the buffer `raw` because of the tee reader.
 		md, checksum, err := d.ReadMetadata()
 		if err != nil {
 			printErrWhileRecording("Error reading metadata: %v", err)
+			printInfo("Retrying in 1s")
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
+		// Create filename based on the extracted metadata
 		var base string // File name without path or extension.
 		artist, artistOk := md.FieldByName("Artist")
 		title, titleOk := md.FieldByName("Title")
@@ -137,6 +146,7 @@ func main() {
 		} else {
 			base = "Unknown_" + strconv.FormatInt(int64(checksum), 10)
 		}
+		base = strings.ReplaceAll(base, "/", "_") // Replace invalid characters
 
 		if discard {
 			printInfo("Going to discard incomplete track: %v", base)
@@ -146,12 +156,16 @@ func main() {
 
 		filename := path.Join(dir, base+".ogg")
 
+		// Determine the (extent of) the rest of the track by reading it, saving
+		// the exact contents of the single track to our buffer `raw` using the
+		// tee reader we set up previously.
 		err = d.ReadRest()
 		if err != nil {
 			printErrWhileRecording("Error reading stream: %v", err)
 			continue
 		}
 
+		// See declaration of `discard`.
 		if !discard {
 			err := os.WriteFile(filename, raw.Bytes(), 0666)
 			if err != nil {
