@@ -24,8 +24,8 @@ const (
 
 var (
 	nTracksRecorded int // Number of recorded tracks.
-	limitTracks bool
-	maxTracks int
+	limitTracks     bool
+	maxTracks       int
 )
 
 func usage(arg0 string, exitStatus int) {
