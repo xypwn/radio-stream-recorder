@@ -4,93 +4,78 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"strconv"
+	"strings"
 )
 
 var (
-	ErrNoHeaderSegment               = errors.New("no header segment")
-	ErrNoMetadata                    = errors.New("no metadata found")
-	ErrCallReadRestAfterReadMetadata = errors.New("please call vorbis.Decoder.ReadRest() after having called vorbis.Decoder.ReadMetadata()")
-	ErrReadMetadataCalledTwice       = errors.New("cannot call vorbis.Decoder.ReadMetadata() twice on the same file")
+	ErrNoHeaderSegment = errors.New("vorbis: no header segment")
 )
 
-type Decoder struct {
-	r           io.Reader
+type Extractor struct {
 	hasMetadata bool
+	metadata    *VorbisComment // Used for filename.
+	checksum    uint32         // Used for an alternate filename when there's no metadata.
 }
 
-func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{
-		r: r,
-	}
+func NewExtractor() (*Extractor, error) {
+	return new(Extractor), nil
 }
 
-func (d *Decoder) readPage() (page OggPage, hdr VorbisHeader, err error) {
+func (d *Extractor) ReadBlock(reader io.Reader, w io.Writer) (isFirst bool, err error) {
+	// Everything we read here is part of the music data so we can just use a
+	// tee reader.
+	r := io.TeeReader(reader, w)
+
 	// Decode page.
-	page, err = OggDecode(d.r)
+	page, err := OggDecode(r)
 	if err != nil {
-		return page, hdr, err
+		return false, err
 	}
 
 	// We need to be able to access `page.Segments[0]`.
 	if len(page.Segments) == 0 {
-		return page, hdr, ErrNoHeaderSegment
+		return false, ErrNoHeaderSegment
 	}
 
 	// Decode Vorbis header, stored in `page.Segments[0]`.
-	hdr, err = VorbisHeaderDecode(bytes.NewBuffer(page.Segments[0]))
+	hdr, err := VorbisHeaderDecode(bytes.NewBuffer(page.Segments[0]))
 	if err != nil {
-		return page, hdr, err
+		return false, err
 	}
 
-	return page, hdr, nil
+	// Extract potential metadata.
+	if hdr.PackType == PackTypeComment {
+		d.hasMetadata = true
+		d.metadata = hdr.Comment
+		d.checksum = page.Header.Checksum
+	}
+
+	// Return true for isFirst if this block is the beginning of a new file.
+	return (page.Header.HeaderType & FHeaderTypeBOS) > 0, nil
 }
 
-// Reads the Ogg/Vorbis file until it finds its metadata. Leaves the reader
-// right after the end of the metadata. `crc32Sum` gives the crc32 checksum
-// of the page containing the metadata. It is equivalent to the page checksum
-// used in the Ogg container. Since the page contains more than just metadata,
-// the checksum can usually be used as a unique identifier.
-func (d *Decoder) ReadMetadata() (metadata *VorbisComment, crc32Sum uint32, err error) {
-	if d.hasMetadata {
-		return nil, 0, ErrReadMetadataCalledTwice
-	}
-
-	for {
-		page, hdr, err := d.readPage()
-		if err != nil {
-			return nil, 0, err
-		}
-
-		if (page.Header.HeaderType & FHeaderTypeEOS) > 0 {
-			// End of stream
-			return nil, 0, ErrNoMetadata
-		}
-
-		if hdr.PackType == PackTypeComment {
-			d.hasMetadata = true
-			return hdr.Comment, page.Header.Checksum, nil
-		}
-	}
-}
-
-// Must to be called after `ReadMetadata()`. Reads the rest of the Ogg/Vorbis
-// file, leaving the reader right after the end of the Ogg/Vorbis file.
-func (d *Decoder) ReadRest() error {
+func (d *Extractor) TryGetFilename() (filename string, hasFilename bool) {
 	if !d.hasMetadata {
-		return ErrCallReadRestAfterReadMetadata
+		return "", false
 	}
+	d.hasMetadata = false
 
-	for {
-		page, _, err := d.readPage()
-		if err != nil {
-			return err
+	// Use relevant metadata to create a filename.
+	var base string // Filename without extension.
+	artist, artistOk := d.metadata.FieldByName("Artist")
+	title, titleOk := d.metadata.FieldByName("Title")
+	if artistOk || titleOk {
+		if !artistOk {
+			artist = "Unknown"
+		} else if !titleOk {
+			title = "Unknown"
 		}
-
-		if (page.Header.HeaderType & FHeaderTypeEOS) > 0 {
-			// End of stream
-			break
-		}
+		base = artist + " -- " + title
+	} else {
+		base = "Unknown_" + strconv.FormatInt(int64(d.checksum), 10)
 	}
+	base = strings.ReplaceAll(base, "/", "_") // Replace invalid characters.
 
-	return nil
+	return base + ".ogg", true
 }

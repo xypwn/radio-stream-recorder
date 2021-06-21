@@ -23,6 +23,7 @@ func (r WaitReader) Read(p []byte) (int, error) {
 		// Reattempt to read the unread bytes until we can fill `p` completely
 		// (or an error occurs).
 		nNew, err := r.r.Read(p[n:len(p)])
+		// Add new number of read bytes.
 		n += nNew
 		if err != nil {
 			return n, err
