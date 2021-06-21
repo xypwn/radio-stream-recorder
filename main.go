@@ -223,7 +223,9 @@ func main() {
 
 	printInfo("URL: %v", url)
 	printInfo("Output directory: %v", dir)
-	printInfo("Stopping after %v tracks", maxTracks)
+	if limitTracks {
+		printInfo("Stopping after %v tracks", maxTracks)
+	}
 
 	// Record the actual stream.
 	for {
