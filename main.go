@@ -76,15 +76,16 @@ func record(url, dir string) {
 
 	// Set up extractor depending on content type.
 	contentType := resp.Header.Get("content-type")
-	supported := "Ogg/Vorbis ('application/ogg'), mp3 ('audio/mpeg')"
 	err = nil
 	switch contentType {
-	case "application/ogg":
+	case "application/ogg", "audio/ogg", "audio/vorbis", "audio/vorbis-config":
 		extractor, err = vorbis.NewExtractor()
-	case "audio/mpeg":
+	case "audio/mpeg", "audio/MPA", "audio/mpa-robust":
 		extractor, err = mp3.NewExtractor(resp.Header)
 	default:
-		printErr("Content type '%v' not supported, supported formats: %v", contentType, supported)
+		printErr(`Content type '%v' not supported, supported formats:
+    Ogg/Vorbis ('application/ogg', 'audio/ogg', 'audio/vorbis', 'audio/vorbis-config')
+    mp3 ('audio/mpeg', 'audio/MPA', 'audio/mpa-robust')`, contentType)
 	}
 	if err != nil {
 		printErr("%v", err)
