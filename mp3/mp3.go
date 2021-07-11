@@ -38,8 +38,8 @@ func NewExtractor(respHdr http.Header) (*Extractor, error) {
 func (d *Extractor) ReadBlock(r io.Reader, w io.Writer) (isFirst bool, err error) {
 	var musicData bytes.Buffer
 
-	// We want to write everything to the output, as well as musicData for
-	// calculating the checksum.
+	// We want to write everything except the metadata to the output and to 
+	// musicData for calculating the checksum.
 	multi := io.MultiWriter(w, &musicData)
 
 	// Read until the metadata chunk. The part that is read here is also what
@@ -57,8 +57,8 @@ func (d *Extractor) ReadBlock(r io.Reader, w io.Writer) (isFirst bool, err error
 	// Read metadata blocks.
 	if numBlocks > 0 {
 		// Metadata is only actually stored in the first metadata chunk
-		// of a given file. Therefore, every metadata chunk with more than 1
-		// block always marks the beginning of a file.
+		// of a given file. Therefore, every metadata chunk with more than 0
+		// blocks always marks the beginning of a file.
 		isBOF = true
 
 		// Each block is 16 bytes in size. Any excess bytes in the last block
@@ -84,8 +84,7 @@ func (d *Extractor) ReadBlock(r io.Reader, w io.Writer) (isFirst bool, err error
 					t = t[1 : len(t)-1]
 					if t == "Unknown" {
 						// If there is no stream title, use format:
-						// Unknown_<crc32 checksum>
-						// Where the checksum is only that of the first block.
+						// Unknown_<crc32 checksum of first block>
 						sumStr := strconv.FormatInt(int64(crc32.ChecksumIEEE(musicData.Bytes())), 10)
 						d.streamTitle = "Unknown_" + sumStr
 					} else {
