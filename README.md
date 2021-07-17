@@ -8,6 +8,8 @@ A program that extracts the individual tracks from an Ogg/Vorbis or mp3 radio st
 
 - Download the binary for your system from https://git.nobrain.org/r4/radio-stream-recorder/releases/latest
 
+- (__*nix only__) Make executable `chmod +x <EXECUTABLE PATH>`
+
 - That should be it, just open a terminal and run it; see usage
 
 ### From source
